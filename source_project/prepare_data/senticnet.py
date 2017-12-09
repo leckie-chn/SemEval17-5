@@ -1,4 +1,4 @@
-import data
+from prepare_data import senticnet_db
 
 
 class Senticnet(object):
@@ -6,7 +6,7 @@ class Senticnet(object):
     Simple API to use Senticnet 4.
     """
     def __init__(self):
-        self.data = data.senticnet
+        self.data = senticnet_db.senticnet
 
     # public methods
 

@@ -2,7 +2,7 @@
 from __future__ import division, print_function
 
 import numpy as np
-from gensim.models import Word2Vec
+from gensim.models.keyedvectors import KeyedVectors
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.feature_extraction.text import VectorizerMixin
 
@@ -87,7 +87,7 @@ class Word2VecFeatures(BaseEstimator, VectorizerMixin, TransformerMixin):
         # TODO: implement word2vec training
         if self.model_name:
             print("Loading Word2Vec")
-            self.model_ = Word2Vec.load_word2vec_format(self.model_name, binary=True)
+            self.model_ = KeyedVectors.load_word2vec_format(self.model_name, binary=True)
             self.num_features_ = self.model_.syn0.shape[1]
             # Index2word is a list that contains the names of the words in
             # the model's vocabulary. Convert it to a set, for speed

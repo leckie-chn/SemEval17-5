@@ -1,9 +1,10 @@
 import os
 import sys
+
 os.environ["THEANO_FLAGS"] = "mode=FAST_RUN,device=gpu1,floatX=float32"
 from keras.engine import Model
 
-sys.path.append('/raid/data/skar3/semeval/source/ml_semeval17/')
+# sys.path.append('/raid/data/skar3/semeval/source/ml_semeval17/')
 from keras.wrappers.scikit_learn import KerasRegressor
 import theano
 import json
@@ -15,22 +16,23 @@ from keras.callbacks import EarlyStopping
 from keras.layers import Dense, Activation, Embedding, Convolution1D, Dropout, recurrent, LSTM, GRU, Merge
 from keras.models import Sequential
 from keras.layers import Dense, Activation, Embedding, Convolution1D, Dropout, GlobalMaxPooling1D, recurrent
-from keras.layers import MaxPooling1D, Flatten, Bidirectional, GRU, TimeDistributed, Conv1D, Reshape
-from keras.engine.topology import Layer, merge, Input
+from keras.layers import MaxPooling1D, Flatten, Bidirectional, GRU, TimeDistributed, Conv1D, Reshape, concatenate
+from keras.engine.topology import Layer, Input
 from keras.models import Sequential
-from keras import initializations
+from keras import initializers
 from keras import backend as K
 import config
 from sklearn.externals import joblib
 # from keras.wrappers.scikit_learn import KerasClassifier
 from sklearn.model_selection import KFold, cross_val_score, train_test_split
 import numpy as np
-from evaluation import report
+# from evaluation import report
 import warnings
+
 warnings.filterwarnings("ignore")
 
 global X_DIM, Y_DIM
-max_features = 3306
+max_features = 3301
 embedding_dims = 300
 max_len = 18
 PREDICTION_THRESHOLD = 0.5
@@ -39,14 +41,15 @@ BATCH_SIZE = 32
 MERGE = False
 N_Features = 96179
 
+
 class AttLayer(Layer):
     def __init__(self, **kwargs):
-        self.init = initializations.get('normal')
+        self.init = initializers.get('normal')
         # self.input_spec = [InputSpec(ndim=3)]
         super(AttLayer, self).__init__(**kwargs)
 
     def build(self, input_shape):
-        self.W = self.init((input_shape[-1], ), name='{}_W_a'.format(self.name))
+        self.W = self.init((input_shape[-1],), name='{}_W_a'.format(self.name))
         self.trainable_weights += [self.W]
         super(AttLayer, self).build(input_shape)
 
@@ -71,22 +74,20 @@ class AttLayer(Layer):
         return (input_shape[0], input_shape[-1])
 
 
-
-def combine_features( feature_list ):
-    return np.concatenate( (feature_list), axis=1 )
-
+def combine_features(feature_list):
+    return np.concatenate((feature_list), axis=1)
 
 
-#===================================================================================
+# ===================================================================================
 # Deep Learning
-#===================================================================================
+# ===================================================================================
 def deep_learning_cv(X_train, y_train, k, X_dev, y_dev, X_test, company_train, company_dev, company_test):
     global X_DIM, Y_DIM
     X_DIM = X_train[0].shape[0]
     y_train = np.array(y_train)
     print(X_train.shape, y_train.shape)
     Y_DIM = 1
-    y_test = np.array(y_dev).reshape(1,-1)
+    y_test = np.array(y_dev).reshape(1, -1)
 
     kfold_cv = KFold(n_splits=k, shuffle=True, random_state=7)
     fold_counter = 1
@@ -125,7 +126,7 @@ def deep_learning_cv(X_train, y_train, k, X_dev, y_dev, X_test, company_train, c
         if MERGE:
             predictions = regressor.predict([X_ts, C_ts, X_ts])
             # test_predictions = regressor.predict(X_dev)
-            predictions = np.array(predictions).reshape(1,-1)
+            predictions = np.array(predictions).reshape(1, -1)
             train_predictions = regressor.predict([X_tr, C_tr, X_tr])
             trial_predictions = regressor.predict([X_dev, company_dev, X_dev])
         else:
@@ -135,7 +136,7 @@ def deep_learning_cv(X_train, y_train, k, X_dev, y_dev, X_test, company_train, c
             train_predictions = regressor.predict(C_tr)
             # trial_predictions = regressor.predict(X_dev)
 
-        cos_train.append( cosine_similarity(y_tr, train_predictions)[0][0] )
+        cos_train.append(cosine_similarity(y_tr, train_predictions)[0][0])
         cos_test.append(cosine_similarity(y_ts, predictions)[0][0])
         # cos_trial.append(cosine_similarity(y_test, trial_predictions)[0][0])
 
@@ -154,12 +155,9 @@ def deep_learning_cv(X_train, y_train, k, X_dev, y_dev, X_test, company_train, c
     print('{},{},{}'.format(np.mean(cos_train), np.mean(cos_test), np.mean(cos_trial)))
 
 
-
-
-
-#===================================================================================
+# ===================================================================================
 # FINAL SUBMISSION
-#===================================================================================
+# ===================================================================================
 def final_predict(X_train, y_train, X_test, company_train, company_dev, company_test):
     global X_DIM, Y_DIM
     X_DIM = X_train[0].shape[0]
@@ -176,18 +174,22 @@ def final_predict(X_train, y_train, X_test, company_train, company_dev, company_
     predictions = regressor.predict([X_test, company_test, X_test])
     print(predictions.shape)
     print(predictions[:20])
-    joblib.dump(predictions, '/raid/data/skar3/semeval/source/ml_semeval17/outputs/subtask2_hl/dl_predictions2.pkl')
+    # joblib.dump(predictions, '/raid/data/skar3/semeval/source/ml_semeval17/outputs/subtask2_hl/dl_predictions2.pkl')
+    joblib.dump(predictions, os.path.join(config.RESULTS_DIR, 'subtask2_hl', 'dl_predictions2.pkl'))
 
     print('Training result', cosine_similarity(y_train, regressor.predict([X_train, company_train, X_train])))
 
+
 def pack_data_to_format():
-    predictions = joblib.load('/raid/data/skar3/semeval/source/ml_semeval17/outputs/subtask2_hl/dl_predictions2.pkl')
+#    predictions = joblib.load('/raid/data/skar3/semeval/source/ml_semeval17/outputs/subtask2_hl/dl_predictions2.pkl')
+    predictions = joblib.load(os.path.join(config.RESULTS_DIR, 'subtask2_hl', 'dl_predictions2.pkl'))
     print(predictions.shape)
     # print(predictions[:5])
     # print(predictions[5:])
 
 
-    test_json = open('/raid/data/skar3/semeval/data/raw/hl_ids.txt', 'r').read().split('\n')[:491]
+    # test_json = open('/raid/data/skar3/semeval/data/raw/hl_ids.txt', 'r').read().split('\n')[:491]
+    test_json = open(os.path.join(config.DATA_DIR, 'raw', 'hl_ids.txt'), 'r').read().split('\n')[:491]
     # print(test_json[:5])
     print(len(test_json))
     pred_list = []
@@ -204,10 +206,8 @@ def pack_data_to_format():
     #     data = {'id': row['id'], 'cashtag': row['cashtag'], 'sentiment score': predictions[index]}
     #     pred_list.append(data)
     print(len(pred_list))
-    json.dump(pred_list, open('/raid/data/skar3/semeval/source/ml_semeval17/outputs/subtask2_hl/dl_submission2.json', 'w'))
-
-
-
+    json.dump(pred_list,
+              open(os.path.join(config.RESULTS_DIR, 'subtask2_hl/dl_submission2.json'), 'w'))
 
 
 def get_features(mode):
@@ -217,22 +217,22 @@ def get_features(mode):
         if mode != 'mb' and (feature_name == 'cashtag' or feature_name == 'source'):
             continue
         print('\n---------------------------------------------')
-        print( 'Loading {} from '.format(feature_name), end=' ' )
+        print('Loading {} from '.format(feature_name), end=' ')
         # filename = '/raid/data/skar3/semeval/vectors/' + 'ner_headline_'+feature_name+'.pkl'
 
         # Microblog
         if mode == 'mb':
-            filename = '/raid/data/skar3/semeval/vectors_mb_new/' + 'ner_microblog_' + feature_name + '.pkl'
+            filename = os.path.join(config.DATA_DIR, 'vectors_mb_new', 'ner_microblog_' + feature_name + '.pkl')
         else:
-            filename = '/raid/data/skar3/semeval/vectors_hl_new/' + 'hl_' + feature_name + '.pkl'
+            filename = os.path.join(config.DATA_DIR, 'vectors_hl_new', 'hl_' + feature_name + '.pkl')
         print(filename)
 
-        loaded_feature = joblib.load( filename )
+        loaded_feature = joblib.load(filename)
 
         if not isinstance(loaded_feature, np.ndarray):
             loaded_feature = loaded_feature.toarray()
         print('Shape =  {}, type = {}'.format(loaded_feature.shape, type(loaded_feature)))
-        loaded_feature_list.append( loaded_feature )
+        loaded_feature_list.append(loaded_feature)
         print('---------------------------------------------')
 
     return combine_features(loaded_feature_list)
@@ -241,31 +241,33 @@ def get_features(mode):
 def compile_cos_sim_theano(v1, v2):
     v1 = theano.tensor.vector(v1)
     v2 = theano.tensor.vector(v2)
-    numerator = theano.tensor.sum(v1*v2)
-    denominator = theano.tensor.sqrt(theano.tensor.sum(v1**2)*theano.tensor.sum(v2**2))
-    return numerator/denominator
+    numerator = theano.tensor.sum(v1 * v2)
+    denominator = theano.tensor.sqrt(theano.tensor.sum(v1 ** 2) * theano.tensor.sum(v2 ** 2))
+    return numerator / denominator
+
 
 # cos_sim_theano_fn = compile_cos_sim_theano()
 
 def cnn_model1():
     global X_DIM, Y_DIM
     # Load Embeddings matrix
-    embedding_weights = joblib.load(config.DUMPED_VECTOR_DIR+'hl_voc_embeddings_prs.pkl')
+    embedding_weights = joblib.load(config.DUMPED_VECTOR_DIR + 'hl_voc_embeddings_prs.pkl')
     print(embedding_weights.shape)
     model = Sequential()
-    model.add( Embedding( max_features,
-                            embedding_dims,
-                            input_length=max_len,
-                            weights=[embedding_weights],
-                            trainable=True) )
-    model.add( Conv1D(512, 3, activation='relu') )
+    model.add(Embedding(max_features,
+                        embedding_dims,
+                        input_length=max_len,
+                        weights=[embedding_weights],
+                        trainable=False))
+    model.add(Conv1D(256, 3, activation='relu'))
     # model.add( MaxPooling1D(3) )
     # model.add(Conv1D(512, 4, activation='relu'))
     # model.add(MaxPooling1D(4))
     # model.add(Conv1D(512, 5, activation='relu'))
     model.add(MaxPooling1D())
-    model.add( Flatten() )
-    model.add( Dense(100, activation='relu') )
+    model.add(Flatten())
+    model.add(Dropout(rate=0.2))
+    model.add(Dense(50, activation='tanh'))
     model.add(Dense(1, init='normal'))
 
     model.compile(loss='mean_squared_error', optimizer='adam')
@@ -279,15 +281,15 @@ def cnn_model1():
 def cnn_2():
     global X_DIM, Y_DIM
     # Load Embeddings matrix
-    embedding_weights = joblib.load(config.DUMPED_VECTOR_DIR+'hl_voc_embeddings_prs.pkl')
+    embedding_weights = joblib.load(config.DUMPED_VECTOR_DIR + 'hl_voc_embeddings_prs.pkl')
 
     model = Sequential()
-    model.add( Embedding( max_features,
-                            embedding_dims,
-                            input_length=max_len,
-                            weights=[embedding_weights],
-                            trainable=True) )
-    model.add( Conv1D(512, 3, activation='relu') )
+    model.add(Embedding(max_features,
+                        embedding_dims,
+                        input_length=max_len,
+                        weights=[embedding_weights],
+                        trainable=True))
+    model.add(Conv1D(512, 3, activation='relu'))
     # model.add( MaxPooling1D() )
     model.add(Conv1D(512, 4, activation='relu'))
     # model.add(MaxPooling1D())
@@ -295,8 +297,8 @@ def cnn_2():
     model.add(MaxPooling1D())
     # model.add(MaxPooling1D(35))
     # model.add(MaxPooling1D(3))
-    model.add( Flatten() )
-    model.add( Dense(20, activation='relu') )
+    model.add(Flatten())
+    model.add(Dense(20, activation='relu'))
     model.add(Dense(1, init='normal'))
 
     model.compile(loss='mean_squared_error', optimizer='adam')
@@ -307,34 +309,34 @@ def cnn_2():
 def cnn_merged():
     global X_DIM, Y_DIM
     # Load Embeddings matrix
-    embedding_weights = joblib.load(config.DUMPED_VECTOR_DIR+'hl_voc_embeddings_prs.pkl')
+    embedding_weights = joblib.load(config.DUMPED_VECTOR_DIR + 'hl_voc_embeddings_prs.pkl')
 
     model_1 = Sequential()
-    model_1.add( Embedding( max_features,
-                            embedding_dims,
-                            input_length=max_len,
-                            weights=[embedding_weights],
-                            trainable=True) )
-    model_1.add( Conv1D(512, 3, activation='relu') )
-    model_1.add( MaxPooling1D() )
+    model_1.add(Embedding(max_features,
+                          embedding_dims,
+                          input_length=max_len,
+                          weights=[embedding_weights],
+                          trainable=True))
+    model_1.add(Conv1D(512, 3, activation='relu'))
+    model_1.add(MaxPooling1D())
     model_1.add(Flatten())
 
     model_2 = Sequential()
     model_2.add(Embedding(max_features,
-                        embedding_dims,
-                        input_length=max_len,
-                        weights=[embedding_weights],
-                        trainable=True))
+                          embedding_dims,
+                          input_length=max_len,
+                          weights=[embedding_weights],
+                          trainable=True))
     model_2.add(Conv1D(512, 4, activation='relu'))
     model_2.add(MaxPooling1D())
     model_2.add(Flatten())
 
     model_3 = Sequential()
     model_3.add(Embedding(max_features,
-                        embedding_dims,
-                        input_length=max_len,
-                        weights=[embedding_weights],
-                        trainable=True))
+                          embedding_dims,
+                          input_length=max_len,
+                          weights=[embedding_weights],
+                          trainable=True))
     model_3.add(Conv1D(512, 5, activation='relu'))
     model_3.add(MaxPooling1D())
     model_3.add(Flatten())
@@ -350,11 +352,11 @@ def cnn_merged():
     combined_model.add(Merge([model_1, model_2, model_3, model_4], mode='concat', concat_axis=1))
     # combined_model.add(MaxPooling1D(3))
 
-    combined_model.add( Dense(1024, activation='relu') )
+    combined_model.add(Dense(1024, activation='relu'))
 
     combined_model.add(Dropout(0.2))
     # combined_model.add(TimeDistributed(Dense(200), name='time_dist'))
-    combined_model.add( Dense(256, activation='relu') )
+    combined_model.add(Dense(256, activation='relu'))
 
     combined_model.add(Dense(100, activation='relu'))
     combined_model.add(Dense(1, init='normal'))
@@ -426,6 +428,7 @@ def attention_imp():
     print(model_atn.summary())
     return model_atn
 
+
 def attention_imp_merge():
     """
     Best One so far with 10 epoch
@@ -434,7 +437,7 @@ def attention_imp_merge():
     """
     global X_DIM, Y_DIM
     # Load Embeddings matrix
-    embedding_weights = joblib.load(config.DUMPED_VECTOR_DIR + 'hl_voc_embeddings_prs.pkl')
+    embedding_weights = joblib.load(config.DUMPED_VECTOR_DIR_HL + 'hl_voc_embeddings_prs.pkl')
 
     # model cnn
 
@@ -457,7 +460,7 @@ def attention_imp_merge():
 
     merged_layer = Sequential()
     merged_layer.add(Merge([model_atn, model_feature_vec], mode='concat',
-                    concat_axis=1, name='merge_layer'))
+                           concat_axis=1, name='merge_layer'))
     merged_layer.add(Dense(200, activation='relu'))
     # merged_layer.add(Bidirectional(GRU(100, return_sequences=True), name='bidirectional_2'))
     # merged_layer.add(TimeDistributed(Dense(200), name='time_dist'))
@@ -492,14 +495,12 @@ def attention_imp_merge_exp_e():
     model_atn.add(TimeDistributed(Dense(200), name='time_dist'))
     model_atn.add(AttLayer(name='att'))
 
-
     model_feature_vec = Sequential()
     model_feature_vec.add(Dense(200, input_dim=N_Features, init='normal', activation='relu'))
     model_feature_vec.add(Dense(100, init='normal', activation='relu'))
     model_feature_vec.add(Dropout(0.2))
     model_feature_vec.add(Dense(50, init='normal', activation='relu'))
     model_feature_vec.add(Dense(10, init='normal', activation='relu'))
-
 
     model_cnn = Sequential()
     model_cnn.add(Embedding(max_features,
@@ -513,7 +514,6 @@ def attention_imp_merge_exp_e():
     model_cnn.add(MaxPooling1D(2, name='maxpool'))
     model_cnn.add(Flatten())
     model_cnn.add(Dense(128, activation='relu'))
-
 
     merged_layer = Sequential()
     merged_layer.add(Merge([model_atn, model_feature_vec, model_cnn], mode='concat',
@@ -552,7 +552,6 @@ def attention_imp_merge_exp():
     model_atn.add(TimeDistributed(Dense(200), name='time_dist'))
     model_atn.add(AttLayer(name='att'))
 
-
     model_feature_vec = Sequential()
     model_feature_vec.add(Dense(200, input_dim=N_Features, init='normal', activation='relu'))
     model_feature_vec.add(Dense(100, init='normal', activation='relu'))
@@ -560,15 +559,12 @@ def attention_imp_merge_exp():
     model_feature_vec.add(Dense(50, init='normal', activation='relu'))
     model_feature_vec.add(Dense(10, init='normal', activation='relu'))
 
-
-
-
-    #functional API
+    # functional API
 
     sentence = Input(shape=(max_len,), dtype='float32', name='w1')
     embedding_layer = Embedding(input_dim=max_features, output_dim=embedding_dims,
-                            weights=[embedding_weights],
-                            )
+                                weights=[embedding_weights],
+                                )
 
     sentence = Input(shape=(max_len,), dtype='float32', name='w1')
     embedding_layer = Embedding(input_dim=max_features, output_dim=embedding_dims,
@@ -580,7 +576,7 @@ def attention_imp_merge_exp():
     # sentence_drop = dropout_1(sentence_emb)
     cnn_layers = [Convolution1D(filter_length=filter_length, nb_filter=512, activation='relu', border_mode='same') for
                   filter_length in [1, 2, 3, 5]]
-    merged_cnn = merge([cnn(sentence_emb) for cnn in cnn_layers], mode='concat', concat_axis=-1)
+    merged_cnn = concatenate([cnn(sentence_emb) for cnn in cnn_layers], axis=-1)
     # pooling_layer = MaxPooling1D(2, name='maxpool')(merged_cnn)
     attention = AttLayer(name='att')(merged_cnn)
     # flatten_layer = Flatten()(attention)
@@ -617,8 +613,6 @@ def attention_imp_merge_exp():
     return merged_layer
 
 
-
-
 def attention_imp_merge_exp_paper():
     """
     https://richliao.github.io/supervised/classification/2016/12/26/textclassifier-HATN/
@@ -626,7 +620,7 @@ def attention_imp_merge_exp_paper():
     """
     global X_DIM, Y_DIM
     # Load Embeddings matrix
-    embedding_weights = joblib.load(config.DUMPED_VECTOR_DIR_HL + 'hl_voc_embeddings_3k.pkl')
+    embedding_weights = joblib.load(config.DUMPED_VECTOR_DIR + 'hl_voc_embeddings_3k.pkl')
 
     # model cnn
 
@@ -640,7 +634,6 @@ def attention_imp_merge_exp_paper():
     model_atn.add(TimeDistributed(Dense(200), name='time_dist'))
     model_atn.add(AttLayer(name='att'))
 
-
     model_feature_vec = Sequential()
     model_feature_vec.add(Dense(200, input_dim=N_Features, init='normal', activation='relu'))
     model_feature_vec.add(Dense(100, init='normal', activation='relu'))
@@ -648,15 +641,12 @@ def attention_imp_merge_exp_paper():
     model_feature_vec.add(Dense(50, init='normal', activation='relu'))
     model_feature_vec.add(Dense(10, init='normal', activation='relu'))
 
-
-
-
-    #functional API
+    # functional API
 
     sentence = Input(shape=(max_len,), dtype='float32', name='w1')
     embedding_layer = Embedding(input_dim=max_features, output_dim=embedding_dims,
-                            weights=[embedding_weights],
-                            )
+                                weights=[embedding_weights],
+                                )
 
     sentence = Input(shape=(max_len,), dtype='float32', name='w1')
     embedding_layer = Embedding(input_dim=max_features, output_dim=embedding_dims,
@@ -668,13 +658,12 @@ def attention_imp_merge_exp_paper():
     # sentence_drop = dropout_1(sentence_emb)
     cnn_layers = [Convolution1D(filter_length=filter_length, nb_filter=512, activation='relu', border_mode='same') for
                   filter_length in [1, 2, 3, 5]]
-    merged_cnn = merge([cnn(sentence_emb) for cnn in cnn_layers], mode='concat', concat_axis=-1)
+    merged_cnn = concatenate([cnn(sentence_emb) for cnn in cnn_layers], axis=-1)
     # pooling_layer = MaxPooling1D(2, name='maxpool')(merged_cnn)
     attention = AttLayer(name='att')(merged_cnn)
     # flatten_layer = Flatten()(attention)
     cnn_model = Dense(128, init='normal', activation='relu')(attention)
     model_cnn = Model(input=[sentence], output=[cnn_model], name='cnn_model')
-
 
     merged_layer = Sequential()
     merged_layer.add(Merge([model_atn, model_feature_vec, model_cnn], mode='concat',
@@ -694,23 +683,24 @@ def attention_imp_merge_exp_paper():
 
 
 def main():
-
-    #----------------------------------------------------------------
+    # ----------------------------------------------------------------
     # Headline
     MOOD = 'hl'
 
     print('Loading X')
-    X = joblib.load(config.DUMPED_VECTOR_DIR_HL+'hl_sequences_3k.pkl')
+    X = joblib.load(config.DUMPED_VECTOR_DIR_HL + 'hl_sequences_3k.pkl')
     features = get_features(MOOD)
     print(X.shape, features.shape)
     print('Loading Y')
 
     if MOOD == 'hl':
-        y = joblib.load( '/raid/data/skar3/semeval/vectors_hl_new/headline_scores.pkl' )
+        # y = joblib.load('/raid/data/skar3/semeval/vectors_hl_new/headline_scores.pkl')
+        y = joblib.load(os.path.join(config.DATA_DIR, 'vectors_hl_new', 'headline_scores.pkl'))
         # company_names = joblib.load(config.DUMPED_VECTOR_DIR+'hl_company.pkl')
         # print(company_names.shape)
     else:
-        y = joblib.load('/raid/data/skar3/semeval/vectors_mb_new/microblog_scores.pkl')
+        # y = joblib.load('/raid/data/skar3/semeval/vectors_mb_new/microblog_scores.pkl')
+        y = joblib.load(os.path.join(config.DATA_DIR, 'vectors_mb_new', 'microblog_scores.pkl'))
     print(type(X), type(y))
 
     # Headline Split
@@ -723,9 +713,8 @@ def main():
     # final_predict(X_train, Y_train, X_test, features_train, features_dev, features_test)
     print("HEADLINE")
 
+
 if __name__ == '__main__':
     main()
     pack_data_to_format()
     # test_cl_exp()
-
-

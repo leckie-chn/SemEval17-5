@@ -1,5 +1,5 @@
 import sys
-sys.path.append('/raid/data/skar3/semeval/source/ml_semeval17')
+# sys.path.append('/raid/data/skar3/semeval/source/ml_semeval17')
 import nltk
 from sklearn.externals import joblib
 import pandas as pd
@@ -11,7 +11,8 @@ from nltk.tokenize import RegexpTokenizer
 from nltk.tokenize import sent_tokenize
 from concurrent import futures
 from shutil import copyfile
-import senticnet
+# import senticnet
+from prepare_data import senticnet
 import re
 
 tokenizer = RegexpTokenizer('\w+')
@@ -31,20 +32,22 @@ def copy_files():
 
     for file in file_list:
         counter += 1
-        copyfile(config.RAW_DATA_PATH+file+'.txt', config.ORIGINAL_DATA_DIR+file+'.txt')
+        copyfile(config.RAW_DATA_PATH + file + '.txt', config.ORIGINAL_DATA_DIR + file + '.txt')
 
     print("Copy Finished {} files".format(counter))
     return data_list
 
 
 def replace_url(content):
-    return re.sub('http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', 'URL', content)
+    pt = 'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'
+    return re.sub(pt, 'URL', content)
+
 
 # ======================================================================================================================
 # TOKENIZE DATA with/out Named Entity and numbers Removal
 # ======================================================================================================================
 
-def remove_named_entities( content ):
+def remove_named_entities(content):
     if isinstance(content, float):
         return ''
 
@@ -84,7 +87,7 @@ def replace_numbers(tokens):
     return tokens
 
 
-def tokenize_csv_file( source_file_path, dest_file_path, column_names, should_remove_NE, should_remove_numbers ):
+def tokenize_csv_file(source_file_path, dest_file_path, column_names, should_remove_NE, should_remove_numbers):
     """
     Tokenizes contents of all the columns mentioned in the params
 
@@ -92,13 +95,16 @@ def tokenize_csv_file( source_file_path, dest_file_path, column_names, should_re
     :param source_dir: (str) Directory of reviews
     :return:
     """
-    source_df = pd.read_csv(source_file_path, encoding='ISO-8859-1')
+    source_df = pd.read_csv(source_file_path, encoding='utf-8')
 
     for index, row in source_df.iterrows():
 
         for target_column in column_names:
             target_text = row[target_column]
-            target_text = replace_url(target_text)
+            try:
+                target_text = replace_url(target_text)
+            except TypeError:
+                continue
             if should_remove_NE:
                 ne_removed_content = remove_named_entities(target_text)
             else:
@@ -123,8 +129,8 @@ def pos_tag_single_file(fileName, source_dir, dest_dir):
 
         for s in sentences:
             tagged = nltk.pos_tag(nltk.word_tokenize(s))
-            tags = ' '.join(list( map(lambda tup: tup[1], tagged) ))
-            word_tags = ' '.join(list(map(lambda tup: tup[0]+'/'+tup[1], tagged)))
+            tags = ' '.join(list(map(lambda tup: tup[1], tagged)))
+            word_tags = ' '.join(list(map(lambda tup: tup[0] + '/' + tup[1], tagged)))
             all_tags += tags
             all_tagged_tokens += word_tags
 
@@ -149,12 +155,13 @@ def pos_tag_directory():
     x = [pool.submit(pos_tag_single_file, file_name, source_dir, destination_dir) for file_name in file_list]
     futures.wait(x)
 
+
 # ======================================================================================================================
 # Writes sentic scores and concepts as column in csv file
 # ======================================================================================================================
 
-def extract_sentic_concepts_and_scores_csv():
-    source_dir = '/raid/data/skar3/semeval/data/preprocessed/mb_train_trial_test_new_prs.csv'
+def extract_sentic_concepts_and_scores_csv(source_dir):
+#    source_dir = os.path.join(config.DATA_DIR, 'preprocessed', 'mb_train_trial_test_new_prs.csv')
     source_df = pd.read_csv(source_dir)
     source_df['concepts'] = ''
     source_df['polarity'] = ''
@@ -167,7 +174,7 @@ def extract_sentic_concepts_and_scores_csv():
 
     for index, row in source_df.iterrows():
         concepts = []
-        concept_scores = {'polarity' : 0, 'attention': 0, 'pleasantness': 0, 'aptitude': 0, 'sensitivity': 0}
+        concept_scores = {'polarity': 0, 'attention': 0, 'pleasantness': 0, 'aptitude': 0, 'sensitivity': 0}
         stemmed_concepts = []
         stemmed_concept_scores = {'polarity': 0, 'attention': 0, 'pleasantness': 0, 'aptitude': 0, 'sensitivity': 0}
 
@@ -179,7 +186,7 @@ def extract_sentic_concepts_and_scores_csv():
             stemmed_title = '_' + '_'.join([stemmer.stem(t) for t in row['text'].lower().split()]) + '_'
         # print(stemmed_title)
         for concept_key in sn.data.keys():
-            if '_' + concept_key +'_' in content:
+            if '_' + concept_key + '_' in content:
                 concepts.append(concept_key)
                 concept_data = sn.concept(concept_key)
                 concept_scores['polarity'] += concept_data['polarity']
@@ -187,7 +194,7 @@ def extract_sentic_concepts_and_scores_csv():
                 concept_scores['pleasantness'] += concept_data['sentics']['pleasantness']
                 concept_scores['aptitude'] += concept_data['sentics']['aptitude']
                 concept_scores['sensitivity'] += concept_data['sentics']['sensitivity']
-            if '_' + concept_key +'_' in stemmed_title:
+            if '_' + concept_key + '_' in stemmed_title:
                 stemmed_concepts.append(concept_key)
                 concept_data = sn.concept(concept_key)
                 stemmed_concept_scores['polarity'] += concept_data['polarity']
@@ -229,7 +236,7 @@ def extract_sentic_concepts_and_scores_csv():
     source_df.to_csv(source_dir, index=False)
 
 
-def extract_data_ids_from_csv( csvpath, output_path, field):
+def extract_data_ids_from_csv(csvpath, output_path, field):
     df = pd.read_csv(csvpath)
     ids = df[field].values
 
@@ -240,17 +247,16 @@ def extract_data_ids_from_csv( csvpath, output_path, field):
         f.close()
 
 
-
-# copy_files()
-# pos_tag_directory()
-tokenize_csv_file('/raid/data/skar3/semeval/data/raw/mb_train_trial_test_new_raw.csv',
-                  '/raid/data/skar3/semeval/data/preprocessed/mb_train_trial_test_new_prs.csv',
-                  ['text'],
-                  True,
-                  True
-                  )
-extract_sentic_concepts_and_scores_csv()
+if __name__ == '__main__':
+    # copy_files()
+    # pos_tag_directory()
+    tokenize_csv_file(os.path.join(config.DATA_DIR, 'raw', 'mb_train_trial_test_new_raw.csv'),
+                      os.path.join(config.DATA_DIR, 'preprocessed', 'mb_train_trial_test_new_prs.csv'),
+                      ['text'],
+                      True,
+                      True
+                      )
+    extract_sentic_concepts_and_scores_csv(os.path.join(config.DATA_DIR, 'preprocessed', 'mb_train_trial_test_new_prs.csv'))
 
 # print(replace_url('@lcc007: $ISR bullish pennant/symmetrical triangle b/o in progress. Long from $2.66 http://stks.co/p0T1O" // BOOOM'))
 # extract_data_ids_from_csv('/raid/data/skar3/semeval/data/raw/headline_test_raw.csv', '/raid/data/skar3/semeval/data/raw/hl_ids.txt', 'id')
-

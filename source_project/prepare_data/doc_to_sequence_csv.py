@@ -1,12 +1,14 @@
 import sys
+import os
 
 sys.path.append('/raid/data/skar3/semeval/source/ml_semeval17/')
 import numpy as np
 from keras.preprocessing.text import Tokenizer
 from keras.preprocessing.sequence import pad_sequences
-from gensim.models import Word2Vec
+from gensim.models.keyedvectors import KeyedVectors
 import config
 import codecs
+from sklearn.externals import joblib
 import pandas as pd
 
 MAX_NB_WORDS = 5000
@@ -68,7 +70,7 @@ def convert_into_sequences(df, colname):
     #
     # Load word embeddings and create embedding matrix
     print('Loading Embeddings')
-    model = Word2Vec.load_word2vec_format(config.WORD_EMBEDDING_VECTOR_PATH, binary=True, encoding='utf-8')
+    model = KeyedVectors.load_word2vec_format(config.WORD_EMBEDDING_VECTOR_PATH, binary=True, encoding='utf-8')
     # model = loadGloveModel(config.WORD_EMBEDDING_VECTOR_PATH)
 
     print('Loaded')
@@ -90,8 +92,8 @@ def convert_into_sequences(df, colname):
     print(len(nf))
     print(len(data))
     print(len(embedding_matrix))
-    # joblib.dump(embedding_matrix, config.DUMPED_VECTOR_DIR+'mb_voc_embeddings.pkl')
-    # joblib.dump(data, config.DUMPED_VECTOR_DIR+'mb_sequences.pkl')
+    joblib.dump(embedding_matrix, os.path.join(config.DUMPED_VECTOR_DIR_HL, 'hl_voc_embeddings.pkl'))
+    joblib.dump(data, os.path.join(config.DUMPED_VECTOR_DIR_HL, 'hl_sequences.pkl'))
 
     print(len(data))
     print(len(embedding_matrix))
@@ -110,7 +112,8 @@ def convert_into_sequences(df, colname):
 
 
 if __name__ == '__main__':
-    df = pd.read_csv('/raid/data/skar3/semeval/data/raw/headline_train_trial_test.csv', encoding='utf-8')
+    df = pd.read_csv(os.path.join(config.DATA_DIR, 'raw', 'hl_train_trial_test_new_raw.csv'), encoding='utf-8')
+    df['text'] = df['text'].fillna('')
     convert_into_sequences(df, 'text')
     # # get_vocabulary_size(data)
     # convert_into_sequences( data )
