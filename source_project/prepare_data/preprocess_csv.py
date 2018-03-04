@@ -6,6 +6,7 @@ import pandas as pd
 import config
 import os
 import traceback
+import copy
 from nltk.stem import PorterStemmer
 from nltk.tokenize import RegexpTokenizer
 from nltk.tokenize import sent_tokenize
@@ -73,6 +74,8 @@ def remove_named_entities(content):
         entity_names.extend(extract_entity_names(tree))
     entity_names = list(reversed(sorted(entity_names, key=len)))
 
+    if 'TCOMPANY' in entity_names:
+        entity_names.remove('TCOMPANY')
     for ne in entity_names:
         content = content.replace(ne, 'NAMEDENTITY')
 
@@ -87,34 +90,39 @@ def replace_numbers(tokens):
     return tokens
 
 
-def tokenize_csv_file(source_file_path, dest_file_path, column_names, should_remove_NE, should_remove_numbers):
-    """
-    Tokenizes contents of all the columns mentioned in the params
+def replace_target_company(content, company_name_list):
+    for company_name in company_name_list:
+        content = content.replace(company_name, 'TCOMPANY')
+    return content
 
 
-    :param source_dir: (str) Directory of reviews
-    :return:
-    """
-    source_df = pd.read_csv(source_file_path, encoding='utf-8')
-
+def tokenize_csv_file(source_df: pd.DataFrame, should_replace_company, should_remove_NE,
+                      should_remove_numbers, company_alias=None) -> pd.DataFrame:
+    # source_df = pd.read_csv(source_file_path, encoding='utf-8')
+    source_df = copy.deepcopy(source_df)
+    target_column = 'text'
     for index, row in source_df.iterrows():
+        target_text = row[target_column]
+        try:
+            target_text = replace_url(target_text)
+        except TypeError:
+            continue
+        if should_replace_company:
+            company_list = [row['company']]
+            if company_alias is not None and row['company'] in company_alias:
+                company_list.extend(company_alias[row['company']])
+            target_text = replace_target_company(target_text, company_list)
+        if should_remove_NE:
+            ne_removed_content = remove_named_entities(target_text)
+        else:
+            ne_removed_content = target_text
 
-        for target_column in column_names:
-            target_text = row[target_column]
-            try:
-                target_text = replace_url(target_text)
-            except TypeError:
-                continue
-            if should_remove_NE:
-                ne_removed_content = remove_named_entities(target_text)
-            else:
-                ne_removed_content = target_text
-
-            tokens = tokenizer.tokenize(ne_removed_content)
-            if should_remove_numbers:
-                tokens = replace_numbers(tokens)
-            source_df.set_value(index, target_column, ' '.join(tokens))
-    source_df.to_csv(dest_file_path, index=False)
+        tokens = tokenizer.tokenize(ne_removed_content)
+        if should_remove_numbers:
+            tokens = replace_numbers(tokens)
+        source_df.set_value(index, target_column, ' '.join(tokens))
+    # source_df.to_csv(dest_file_path, index=False)
+    return source_df
 
 
 def pos_tag_single_file(fileName, source_dir, dest_dir):
@@ -161,7 +169,7 @@ def pos_tag_directory():
 # ======================================================================================================================
 
 def extract_sentic_concepts_and_scores_csv(source_dir):
-#    source_dir = os.path.join(config.DATA_DIR, 'preprocessed', 'mb_train_trial_test_new_prs.csv')
+    #    source_dir = os.path.join(config.DATA_DIR, 'preprocessed', 'mb_train_trial_test_new_prs.csv')
     source_df = pd.read_csv(source_dir)
     source_df['concepts'] = ''
     source_df['polarity'] = ''
@@ -256,7 +264,8 @@ if __name__ == '__main__':
                       True,
                       True
                       )
-    extract_sentic_concepts_and_scores_csv(os.path.join(config.DATA_DIR, 'preprocessed', 'mb_train_trial_test_new_prs.csv'))
+    extract_sentic_concepts_and_scores_csv(
+        os.path.join(config.DATA_DIR, 'preprocessed', 'mb_train_trial_test_new_prs.csv'))
 
 # print(replace_url('@lcc007: $ISR bullish pennant/symmetrical triangle b/o in progress. Long from $2.66 http://stks.co/p0T1O" // BOOOM'))
 # extract_data_ids_from_csv('/raid/data/skar3/semeval/data/raw/headline_test_raw.csv', '/raid/data/skar3/semeval/data/raw/hl_ids.txt', 'id')

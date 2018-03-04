@@ -6,7 +6,6 @@ from keras.engine import Model
 
 # sys.path.append('/raid/data/skar3/semeval/source/ml_semeval17/')
 from keras.wrappers.scikit_learn import KerasRegressor
-import theano
 import json
 from sklearn import linear_model
 from time import gmtime, strftime
@@ -44,13 +43,11 @@ N_Features = 96179
 
 class AttLayer(Layer):
     def __init__(self, **kwargs):
-        self.init = initializers.get('normal')
         # self.input_spec = [InputSpec(ndim=3)]
         super(AttLayer, self).__init__(**kwargs)
 
     def build(self, input_shape):
-        self.W = self.init((input_shape[-1],), name='{}_W_a'.format(self.name))
-        self.trainable_weights += [self.W]
+        self.W = self.add_weight(name='weight_attn', shape=(input_shape[-1], 1), initializer='normal', trainable=True)
         super(AttLayer, self).build(input_shape)
 
     # print(len(input_shape), 'input >>>>>>>>>>>>>>>>>>>>>>>')
@@ -64,13 +61,14 @@ class AttLayer(Layer):
     def call(self, x, mask=None):
         eij = K.tanh(K.dot(x, self.W))
 
-        ai = K.exp(eij)
-        weights = ai / K.sum(ai, axis=1).dimshuffle(0, 'x')
+        ai = K.squeeze(K.exp(eij), axis=2)
+        weights = ai / K.sum(ai, axis=1, keepdims=True)
 
-        weighted_input = x * weights.dimshuffle(0, 1, 'x')
-        return weighted_input.sum(axis=1)
+        weighted_input = x * K.expand_dims(weights, axis=2)
+        output = K.sum(weighted_input, axis=1, keepdims=False)
+        return output
 
-    def get_output_shape_for(self, input_shape):
+    def compute_output_shape(self, input_shape):
         return (input_shape[0], input_shape[-1])
 
 
@@ -181,7 +179,7 @@ def final_predict(X_train, y_train, X_test, company_train, company_dev, company_
 
 
 def pack_data_to_format():
-#    predictions = joblib.load('/raid/data/skar3/semeval/source/ml_semeval17/outputs/subtask2_hl/dl_predictions2.pkl')
+    #    predictions = joblib.load('/raid/data/skar3/semeval/source/ml_semeval17/outputs/subtask2_hl/dl_predictions2.pkl')
     predictions = joblib.load(os.path.join(config.RESULTS_DIR, 'subtask2_hl', 'dl_predictions2.pkl'))
     print(predictions.shape)
     # print(predictions[:5])

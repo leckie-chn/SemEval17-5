@@ -18,6 +18,8 @@ WORD_EMBEDDING_VECTOR_PATH = '/home/niyan/stockNN/data/wemb/GoogleNews-vectors-n
 VOCABULARY_WORD_TO_INDEX_LIST = os.path.join(DATA_DIR, 'preprocessed/headline_vocabulary_to_index.json')
 VOCABULARY_INDEX_TO_WORD_LIST = os.path.join(DATA_DIR, 'preprocessed/headline_index_to_word.json')
 
+XDING_SOURCE_PATH = '/home/niyan/stockNN/data/news'
+
 features_to_extract = [
     'rf_unigram',
     'rf_bigram',

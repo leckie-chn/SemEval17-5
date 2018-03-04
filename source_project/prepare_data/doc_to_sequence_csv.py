@@ -40,69 +40,83 @@ def loadGloveModel(gloveFile):
     return model
 
 
-def convert_into_sequences(df, colname):
-    tokenizer = Tokenizer(nb_words=MAX_NB_WORDS)
-    tokenizer.fit_on_texts(df[colname].values)
-    sequences = tokenizer.texts_to_sequences(df[colname].values)
-    sl = max(list(map(lambda x: len(x), sequences)))
-    print(sl)
-    # print(df[colname].values[:10])
-    print(sequences[:10])
-    print(max(tokenizer.word_index.values()), len(tokenizer.word_index.values()))
-
-    lens = list(map(lambda s: len(s), sequences))
-    print(len(lens), max(lens))
-    data = pad_sequences(sequences, maxlen=sl)
-    print(data[:10])
-
-    #
-    #
-    #  Write dictionaries to json file
-    #  with open(config.VOCABULARY_WORD_TO_INDEX_LIST, 'w') as f:
-    #      json.dump(tokenizer.word_index, f)
-    #      f.close()
-    # #
-    index_to_word = {v: k for k, v in tokenizer.word_index.items()}
-    #  with open(config.VOCABULARY_INDEX_TO_WORD_LIST, 'w') as f:
-    #      json.dump(index_to_word, f)
-    #      f.close()
-    #
-    #
-    # Load word embeddings and create embedding matrix
-    print('Loading Embeddings')
-    model = KeyedVectors.load_word2vec_format(config.WORD_EMBEDDING_VECTOR_PATH, binary=True, encoding='utf-8')
-    # model = loadGloveModel(config.WORD_EMBEDDING_VECTOR_PATH)
-
-    print('Loaded')
-    print(model['try'])
-    #
-    nf = set()
-    embedding_matrix = np.zeros((len(tokenizer.word_index) + 1, 300))
-    counter = 0
-    for word, i in tokenizer.word_index.items():
-
-        embedding_vector = np.zeros(300)
-        if word in model:
-            embedding_matrix[i] = model[word]
-            counter += 1
+class TextConverter:
+    def __init__(self, embed_source: str, encode_entity=True, encode_numeric=True, sl=None):
+        self.tokenizer = Tokenizer(num_words=MAX_NB_WORDS, lower=True)
+        if embed_source.endswith('.bin'):
+            self.model = KeyedVectors.load_word2vec_format(embed_source, binary=True, encoding='utf-8')
         else:
-            nf.add(word)
+            self.model = loadGloveModel(embed_source)
+        self.encode_entity = encode_entity
+        self.encode_numeric = encode_numeric
+        self.wemb_size = 300
+        self.embed_dim = self.wemb_size + (1 if encode_entity else 0) + (2 if encode_numeric else 0)
+        self.entity_bit = 300
+        self.log_bit = 301 if encode_entity else 300
+        self.digit_bit = 302 if encode_entity else 301
+        self.sl = sl
+        self.emb_matrix = None
+
+    def fit(self, df: pd.DataFrame, colname: str):
+        self.tokenizer.fit_on_texts(df[colname].values)
+        sequences = self.tokenizer.texts_to_sequences(df[colname].values)
+        if self.sl is None:
+            self.sl = max(list(map(lambda x: len(x), sequences)))
+        embedding_matrix = np.zeros((len(self.tokenizer.word_index) + 1, self.embed_dim))
+        for word, i in self.tokenizer.word_index.items():
+            embedding_vector = np.zeros(self.embed_dim)
+            if self.encode_numeric and str(word).isnumeric():
+                x_val = float(word)
+                embedding_vector[self.log_bit] = np.log10(x_val)
+                embedding_vector[self.digit_bit] = x_val / np.power(10, np.trunc(np.log10(x_val)))
+            elif self.encode_entity and str(word).lower() == 'tcompany':
+                embedding_vector[self.entity_bit] = 1.0
+            elif self.encode_entity and str(word).lower() == 'namedentity':
+                embedding_vector[self.entity_bit] = -1.0
+            elif word in self.model:
+                embedding_vector[:self.wemb_size] = self.model[word]
+                # VOC_set.add(word)
             embedding_matrix[i] = embedding_vector
+        self.emb_matrix = embedding_matrix
+        return self.emb_matrix
 
-    print(len(nf))
-    print(len(data))
-    print(len(embedding_matrix))
-    joblib.dump(embedding_matrix, os.path.join(config.DUMPED_VECTOR_DIR_HL, 'hl_voc_embeddings.pkl'))
-    joblib.dump(data, os.path.join(config.DUMPED_VECTOR_DIR_HL, 'hl_sequences.pkl'))
+    def convert(self, df: pd.DataFrame, colname: str) -> np.ndarray:
+        sequences = self.tokenizer.texts_to_sequences(df[colname].values)
+        data = pad_sequences(sequences, maxlen=self.sl, padding='post', truncating='post')
+        return data
 
-    print(len(data))
-    print(len(embedding_matrix))
-    print(data.shape)
-    print(embedding_matrix.shape)
-    print(counter)
-
-    print(nf)
-    return None, None
+# def convert_into_sequences(df, colname, encode_entity = True, encode_numeric=True):
+#     print(sl)
+#
+#     lens = list(map(lambda s: len(s), sequences))
+#     print(len(lens), max(lens))
+#
+#     index_to_word = {v: k for k, v in tokenizer.word_index.items()}
+#     print('Loading Embeddings')
+#     model =
+#     # model = loadGloveModel(config.WORD_EMBEDDING_VECTOR_PATH)
+#
+#     print('Embeddings Loaded')
+#     OOV_set = set()
+#     VOC_set = set()
+#
+#
+#
+#     print('Dump hl_sequence.pkl, shape: {}'.format(np.shape(data)))
+#     # joblib.dump(data, os.path.join(config.DUMPED_VECTOR_DIR_HL, 'hl_sequences.pkl'))
+#     print('Dump hl_voc_embeddings.pkl, shape: {}'.format(np.shape(embedding_matrix)))
+#     # joblib.dump(embedding_matrix, os.path.join(config.DUMPED_VECTOR_DIR_HL, 'hl_voc_embeddings.pkl'))
+#
+#     print('\n\n')
+#
+#     print('Out of Vocabulary words:')
+#     print(OOV_set)
+#
+#     print('\n\n')
+#
+#     print('Vocab words: {} in total'.format(len(VOC_set)))
+#     print(sorted(VOC_set))
+#     return data, embedding_matrix
 
 
 # def metadata_to_emb_vectors():

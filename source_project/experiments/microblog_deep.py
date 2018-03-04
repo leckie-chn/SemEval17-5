@@ -49,12 +49,10 @@ N_Features = 244677
 
 class AttLayer(Layer):
     def __init__(self, **kwargs):
-        self.init = initializers.get('normal')
-        # self.input_spec = [InputSpec(ndim=3)]
         super(AttLayer, self).__init__(**kwargs)
 
     def build(self, input_shape):
-        self.W = self.init((input_shape[-1],), name='{}_W_a'.format(self.name))
+        self.W = self.add_weight(name='weight_attn', shape=(input_shape[-1],))
         self.trainable_weights += [self.W]
         super(AttLayer, self).build(input_shape)
 
